@@ -1,0 +1,8 @@
+seed: 42
+temperature_attacker: 0.9
+temperature_defenders: 0.3
+temperature_ceo: 0.7
+max_turns: 30
+max_retries_format: 2
+max_cost_per_run_eur: 10.0
+max_total_budget_eur: 200.0

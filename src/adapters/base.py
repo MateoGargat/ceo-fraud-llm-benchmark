@@ -21,7 +21,7 @@ class BaseAdapter(ABC):
         ...
 
 
-def get_adapter(model: str) -> BaseAdapter:
+def get_adapter(model: str, seed: int | None = None) -> BaseAdapter:
     from src.adapters.claude_cli import ClaudeCLIAdapter
     from src.adapters.gemini_cli import GeminiCLIAdapter
     from src.adapters.openai_sdk import OpenAIAdapter
@@ -40,4 +40,4 @@ def get_adapter(model: str) -> BaseAdapter:
     cls = adapters.get(model)
     if cls is None:
         raise ValueError(f"Unknown model: {model}. Available: {list(adapters.keys())}")
-    return cls()
+    return cls(seed=seed)

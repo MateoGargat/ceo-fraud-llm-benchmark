@@ -24,7 +24,8 @@ class SimulationEngine:
         self.cost_tracker = CostTracker(max_per_run=config.max_cost_per_run_usd, max_total=config.max_total_budget_usd)
         if adapter_factory is None:
             from src.adapters.base import get_adapter
-            self.adapter_factory = get_adapter
+            seed = config.seed
+            self.adapter_factory = lambda model: get_adapter(model, seed=seed)
         else:
             self.adapter_factory = adapter_factory
         defender_roles = [r for r in config.roles if r != "ceo"]

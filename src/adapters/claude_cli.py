@@ -4,6 +4,9 @@ from src.adapters.base import BaseAdapter, AdapterResponse
 
 
 class ClaudeCLIAdapter(BaseAdapter):
+    def __init__(self, seed: int | None = None):
+        self.seed = seed
+
     async def call(self, system_prompt: str, messages: list[dict[str, str]], temperature: float = 0.7) -> AdapterResponse:
         prompt = f"{system_prompt}\n\n" + "\n".join(f"{m['role']}: {m['content']}" for m in messages)
         proc = await asyncio.create_subprocess_exec(

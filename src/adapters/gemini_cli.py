@@ -8,9 +8,12 @@ class GeminiCLIAdapter(BaseAdapter):
         prompt = f"{system_prompt}\n\n" + "\n".join(f"{m['role']}: {m['content']}" for m in messages)
         proc = await asyncio.create_subprocess_exec(
             "gemini", "-p", prompt,
+            "--temperature", str(temperature),
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
         )
         stdout, stderr = await proc.communicate()
+        if proc.returncode != 0:
+            raise RuntimeError(f"CLI 'gemini' failed (exit {proc.returncode}): {stderr.decode('utf-8', errors='replace')}")
         text = stdout.decode("utf-8", errors="replace").strip()
         input_tokens = len(prompt) // 4
         output_tokens = len(text) // 4

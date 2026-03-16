@@ -6,7 +6,10 @@ from src.adapters.base import BaseAdapter, AdapterResponse
 
 class DeepSeekAdapter(BaseAdapter):
     def __init__(self):
-        self.client = AsyncOpenAI(api_key=os.getenv("DEEPSEEK_API_KEY", "dummy"), base_url="https://api.deepseek.com/v1")
+        api_key = os.getenv("DEEPSEEK_API_KEY")
+        if not api_key:
+            raise ValueError("DEEPSEEK_API_KEY environment variable is required")
+        self.client = AsyncOpenAI(api_key=api_key, base_url="https://api.deepseek.com/v1")
         self.model = "deepseek-chat"
 
     async def call(self, system_prompt: str, messages: list[dict[str, str]], temperature: float = 0.7) -> AdapterResponse:

@@ -6,7 +6,10 @@ from src.adapters.base import BaseAdapter, AdapterResponse
 
 class XAIAdapter(BaseAdapter):
     def __init__(self):
-        self.client = AsyncOpenAI(api_key=os.getenv("XAI_API_KEY", "dummy"), base_url="https://api.x.ai/v1")
+        api_key = os.getenv("XAI_API_KEY")
+        if not api_key:
+            raise ValueError("XAI_API_KEY environment variable is required")
+        self.client = AsyncOpenAI(api_key=api_key, base_url="https://api.x.ai/v1")
         self.model = "grok-3"
 
     async def call(self, system_prompt: str, messages: list[dict[str, str]], temperature: float = 0.7) -> AdapterResponse:

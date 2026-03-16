@@ -6,7 +6,10 @@ from src.adapters.base import BaseAdapter, AdapterResponse
 
 class OpenAIAdapter(BaseAdapter):
     def __init__(self):
-        self.client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY", "dummy"))
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise ValueError("OPENAI_API_KEY environment variable is required")
+        self.client = AsyncOpenAI(api_key=api_key)
         self.model = "gpt-5.4-2026-02"
 
     async def call(self, system_prompt: str, messages: list[dict[str, str]], temperature: float = 0.7) -> AdapterResponse:

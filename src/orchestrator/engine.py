@@ -27,7 +27,8 @@ class SimulationEngine:
             self.adapter_factory = get_adapter
         else:
             self.adapter_factory = adapter_factory
-        self.router = Router(defender_names=["comptable", "rh", "dsi"])
+        defender_roles = [r for r in config.roles if r != "ceo"]
+        self.router = Router(defender_names=defender_roles)
         self.deferred_internal: list[tuple[str, Message]] = []
 
     async def _call_and_parse_attacker(self, attacker, max_retries: int):
@@ -70,7 +71,7 @@ class SimulationEngine:
             attacker = AttackerAgent(adapter=attacker_adapter, ceo_corpus=ceo_corpus, temperature=self.config.temperature_attacker)
 
             defenders: dict[str, DefenderAgent] = {}
-            for role in ["comptable", "rh", "dsi"]:
+            for role in self.router.defender_names:
                 model = self.config.roles[role]
                 adapter = self.adapter_factory(model)
                 prompt_path = PROMPT_DIR / f"{role}.md"

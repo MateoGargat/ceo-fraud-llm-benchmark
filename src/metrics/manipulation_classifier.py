@@ -1,9 +1,9 @@
 from __future__ import annotations
 import json
-from pathlib import Path
 from src.adapters.base import BaseAdapter
+from src.paths import PROMPTS_DIR
 
-JUDGE_PROMPT_PATH = Path("prompts/judge/analysis.md")
+JUDGE_PROMPT_PATH = PROMPTS_DIR / "judge" / "analysis.md"
 
 
 class ManipulationClassifier:

@@ -1,9 +1,9 @@
 from __future__ import annotations
-from pathlib import Path
 from src.adapters.base import BaseAdapter, AdapterResponse
 from src.agents.base import AgentContext
+from src.paths import PROMPTS_DIR
 
-CHANNEL_DIR = Path("prompts/channels")
+CHANNEL_DIR = PROMPTS_DIR / "channels"
 
 class DefenderAgent:
     def __init__(self, adapter: BaseAdapter, role: str, prompt_template: str, temperature: float = 0.3):

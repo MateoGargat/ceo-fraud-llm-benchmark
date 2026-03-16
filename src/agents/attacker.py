@@ -1,9 +1,9 @@
 from __future__ import annotations
-from pathlib import Path
 from src.adapters.base import BaseAdapter, AdapterResponse
 from src.agents.base import AgentContext
+from src.paths import PROMPTS_DIR
 
-PROMPT_PATH = Path("prompts/system/attacker.md")
+PROMPT_PATH = PROMPTS_DIR / "system" / "attacker.md"
 
 class AttackerAgent:
     def __init__(self, adapter: BaseAdapter, ceo_corpus: str, iban: str = "FR7630001007941234567890185", temperature: float = 0.9):

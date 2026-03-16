@@ -1,6 +1,5 @@
 from __future__ import annotations
 from typing import Callable
-from pathlib import Path
 
 from src.utils.config import RunConfig
 from src.utils.logger import SimulationLogger
@@ -12,8 +11,9 @@ from src.agents.ceo_profiler import CEOProfiler
 from src.orchestrator.parser import parse_attacker_response, parse_defender_response, ParseError, Message
 from src.orchestrator.router import Router
 from src.orchestrator.end_conditions import check_end_conditions, GameResult
+from src.paths import PROMPTS_DIR
 
-PROMPT_DIR = Path("prompts/system")
+PROMPT_DIR = PROMPTS_DIR / "system"
 
 
 class SimulationEngine:

@@ -1,8 +1,8 @@
 from __future__ import annotations
-from pathlib import Path
 from src.adapters.base import BaseAdapter
+from src.paths import PROMPTS_DIR
 
-PROMPT_PATH = Path("prompts/system/ceo.md")
+PROMPT_PATH = PROMPTS_DIR / "system" / "ceo.md"
 
 class CEOProfiler:
     def __init__(self, adapter: BaseAdapter, temperature: float = 0.7):

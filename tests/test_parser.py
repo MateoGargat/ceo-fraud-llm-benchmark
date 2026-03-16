@@ -74,6 +74,38 @@ def test_parse_defender_execute_transfer():
     assert result.execute_transfer is not None
     assert result.execute_transfer.amount == 250000
 
-def test_parse_malformed_xml():
-    with pytest.raises(Exception):
+DEFENDER_FLOAT_TRUST_XML = """
+<inner_thought>Thinking</inner_thought>
+<trust_level value="75.5">Moderate trust</trust_level>
+<apparent_trust value="80.0">Showing confidence</apparent_trust>
+<actions>
+  <wait/>
+</actions>
+"""
+
+DEFENDER_FLOAT_AMOUNT_XML = """
+<inner_thought>Doing the transfer</inner_thought>
+<trust_level value="70">OK</trust_level>
+<apparent_trust value="80">Sure</apparent_trust>
+<actions>
+  <execute_transfer amount="250000.00" iban="FR76123"/>
+</actions>
+"""
+
+
+def test_parse_defender_float_trust_level():
+    result = parse_defender_response(DEFENDER_FLOAT_TRUST_XML)
+    assert result.trust_level == 75
+    assert result.apparent_trust == 80
+
+
+def test_parse_defender_float_amount():
+    result = parse_defender_response(DEFENDER_FLOAT_AMOUNT_XML)
+    assert result.execute_transfer is not None
+    assert result.execute_transfer.amount == 250000
+
+
+def test_parse_malformed_xml_raises_parse_error():
+    from src.orchestrator.parser import ParseError
+    with pytest.raises(ParseError):
         parse_attacker_response("This is not XML at all")

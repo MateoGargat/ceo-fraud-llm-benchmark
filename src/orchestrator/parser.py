@@ -66,10 +66,10 @@ def _extract_tag_text(raw: str, tag: str) -> Optional[str]:
 
 
 def _extract_tag_value(raw: str, tag: str) -> Optional[int]:
-    pattern = rf'<{tag}\s+value="(\d+)"'
+    pattern = rf'<{tag}\s+value="(\d+(?:\.\d+)?)"'
     match = re.search(pattern, raw)
     if match:
-        return int(match.group(1))
+        return int(float(match.group(1)))
     return None
 
 
@@ -138,8 +138,13 @@ def parse_defender_response(raw: str) -> DefenderResponse:
                 content=(child.text or "").strip(),
             ))
         elif child.tag == "execute_transfer":
+            raw_amount = child.get("amount", "0")
+            try:
+                amount = int(float(raw_amount))
+            except (ValueError, TypeError):
+                raise ParseError(f"Invalid transfer amount: {raw_amount}")
             execute_transfer = TransferAction(
-                amount=int(child.get("amount", 0)),
+                amount=amount,
                 iban=child.get("iban", ""),
             )
         elif child.tag == "refuse_transfer":

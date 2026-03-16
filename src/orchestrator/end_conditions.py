@@ -1,6 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from src.orchestrator.parser import AttackerResponse, DefenderResponse
+from src.orchestrator.parser import DefenderResponse
 
 
 @dataclass
@@ -12,13 +12,9 @@ class GameResult:
 
 def check_end_conditions(
     turn: int,
-    attacker: AttackerResponse | None,
     defender_responses: dict[str, DefenderResponse],
     max_turns: int = 30,
 ) -> GameResult | None:
-    if attacker and attacker.abort:
-        return GameResult("WIN_DEFENDERS", "attaquant_abandonne", turn)
-
     # Check defensive actions first (higher priority)
     for name, resp in defender_responses.items():
         if resp.declare_fraud:

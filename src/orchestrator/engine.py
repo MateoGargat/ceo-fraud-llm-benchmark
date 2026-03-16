@@ -180,7 +180,7 @@ class SimulationEngine:
             attacker.receive_public_messages(turn, all_public)
 
             # Step 6: Check end conditions
-            result = check_end_conditions(turn, None, defender_responses, max_turns=self.config.max_turns)
+            result = check_end_conditions(turn, defender_responses, max_turns=self.config.max_turns)
             if result:
                 self.logger.log_outcome(result.outcome, result.end_condition, turn)
                 self.logger.save()

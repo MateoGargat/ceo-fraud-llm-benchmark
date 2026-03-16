@@ -150,3 +150,38 @@ async def test_engine_handles_budget_exceeded(tmp_path):
     result = await engine.run()
     assert result.outcome == "STALEMATE"
     assert result.end_condition == "budget_exceeded"
+
+
+@pytest.mark.asyncio
+async def test_engine_logs_parse_errors(tmp_path):
+    """When all retries fail, the engine should log the parse error, not silently skip."""
+    config = RunConfig(
+        run_id="test_parse_log",
+        attacker_model="claude",
+        roles={"comptable": "deepseek", "rh": "claude", "dsi": "gemini", "ceo": "grok"},
+        max_turns=2,
+        max_retries_format=1,
+    )
+
+    async def mock_call(system_prompt, messages, temperature=0.7):
+        # CEO profiler returns valid text (empty messages list)
+        if not messages:
+            return AdapterResponse(text="CEO style", input_tokens=50, output_tokens=50)
+        # Everything else returns garbage (unparseable)
+        return AdapterResponse(text="This is not valid XML", input_tokens=50, output_tokens=50)
+
+    engine = SimulationEngine(
+        config=config,
+        output_dir=str(tmp_path),
+        adapter_factory=lambda model: AsyncMock(call=mock_call),
+    )
+    result = await engine.run()
+    assert result.outcome == "STALEMATE"
+
+    # Check that parse errors were logged
+    import json
+    log_path = tmp_path / "test_parse_log.json"
+    with open(log_path) as f:
+        log = json.load(f)
+    parse_errors = [t for t in log["inner_thoughts"] if "PARSE_ERROR" in t["thought"]]
+    assert len(parse_errors) > 0

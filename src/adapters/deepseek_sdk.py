@@ -5,18 +5,20 @@ from src.adapters.base import BaseAdapter, AdapterResponse
 
 
 class DeepSeekAdapter(BaseAdapter):
-    def __init__(self):
+    def __init__(self, seed: int | None = None):
         api_key = os.getenv("DEEPSEEK_API_KEY")
         if not api_key:
             raise ValueError("DEEPSEEK_API_KEY environment variable is required")
         self.client = AsyncOpenAI(api_key=api_key, base_url="https://api.deepseek.com/v1")
         self.model = "deepseek-chat"
+        self.seed = seed
 
     async def call(self, system_prompt: str, messages: list[dict[str, str]], temperature: float = 0.7) -> AdapterResponse:
         api_messages = [{"role": "system", "content": system_prompt}] + messages
-        response = await self.client.chat.completions.create(
-            model=self.model, messages=api_messages, temperature=temperature,
-        )
+        kwargs = {"model": self.model, "messages": api_messages, "temperature": temperature}
+        if self.seed is not None:
+            kwargs["seed"] = self.seed
+        response = await self.client.chat.completions.create(**kwargs)
         choice = response.choices[0]
         usage = response.usage
         return AdapterResponse(

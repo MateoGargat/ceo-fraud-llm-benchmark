@@ -6,7 +6,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.utils.config import load_config
-from src.utils.cost_tracker import CostTracker, BudgetExceededError
+from src.utils.cost_tracker import CostTracker
 from src.orchestrator.engine import SimulationEngine
 
 
@@ -22,7 +22,11 @@ async def main():
     print(f"Found {len(config_files)} configs")
 
     # Shared cost tracker across all runs
-    first_config = load_config(str(config_files[0]))
+    base_path = configs_dir.parent / "base.yaml"
+    first_config = load_config(
+        str(config_files[0]),
+        base_path=str(base_path) if base_path.exists() else None,
+    )
     shared_tracker = CostTracker(
         max_per_run=first_config.max_cost_per_run_usd,
         max_total=first_config.max_total_budget_usd,
@@ -30,7 +34,10 @@ async def main():
 
     results = []
     for config_path in config_files:
-        config = load_config(str(config_path))
+        config = load_config(
+            str(config_path),
+            base_path=str(base_path) if base_path.exists() else None,
+        )
         output_dir = f"data/raw/{config.run_id}"
         print(f"\n{'='*60}")
         print(f"Run: {config.run_id} | Attacker: {config.attacker_model}")
@@ -41,9 +48,9 @@ async def main():
             result = await engine.run()
             results.append({"run_id": config.run_id, "outcome": result.outcome, "turn": result.turn})
             print(f"Result: {result.outcome} at turn {result.turn}")
-        except BudgetExceededError as e:
-            print(f"BUDGET EXCEEDED: {e}")
-            break
+            if result.end_condition == "budget_exceeded":
+                print("Budget exceeded, stopping experiment.")
+                break
         except Exception as e:
             print(f"ERROR: {e}")
             results.append({"run_id": config.run_id, "outcome": "ERROR", "error": str(e)})

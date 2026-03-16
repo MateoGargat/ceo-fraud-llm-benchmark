@@ -24,7 +24,8 @@ class SimulationEngine:
         self.cost_tracker = CostTracker(max_per_run=config.max_cost_per_run_usd, max_total=config.max_total_budget_usd)
         if adapter_factory is None:
             from src.adapters.base import get_adapter
-            self.adapter_factory = get_adapter
+            seed = config.seed
+            self.adapter_factory = lambda model: get_adapter(model, seed=seed)
         else:
             self.adapter_factory = adapter_factory
         defender_roles = [r for r in config.roles if r != "ceo"]
@@ -101,6 +102,7 @@ class SimulationEngine:
             try:
                 parsed_attacker = await self._call_and_parse_attacker(attacker, max_retries)
             except ParseError:
+                self.logger.log_inner_thought(turn, "attacker", "[PARSE_ERROR] Response unparseable after retries")
                 continue
             self.logger.log_inner_thought(turn, "attacker", parsed_attacker.inner_thought)
 
@@ -129,6 +131,7 @@ class SimulationEngine:
                 try:
                     parsed_def = await self._call_and_parse_defender(defenders[agent_name], channel, model, max_retries)
                 except ParseError:
+                    self.logger.log_inner_thought(turn, agent_name, "[PARSE_ERROR] Response unparseable after retries")
                     continue
                 defender_responses[agent_name] = parsed_def
                 self.logger.log_inner_thought(turn, agent_name, parsed_def.inner_thought)
@@ -155,6 +158,7 @@ class SimulationEngine:
                             try:
                                 parsed_cascade = await self._call_and_parse_defender(defenders[target_name], "internal", model, max_retries)
                             except ParseError:
+                                self.logger.log_inner_thought(turn, target_name, "[PARSE_ERROR] Cascade response unparseable after retries")
                                 continue
                             defender_responses[target_name] = parsed_cascade
                             self.logger.log_inner_thought(turn, target_name, parsed_cascade.inner_thought)
@@ -177,7 +181,7 @@ class SimulationEngine:
             attacker.receive_public_messages(turn, all_public)
 
             # Step 6: Check end conditions
-            result = check_end_conditions(turn, None, defender_responses, max_turns=self.config.max_turns)
+            result = check_end_conditions(turn, defender_responses, max_turns=self.config.max_turns)
             if result:
                 self.logger.log_outcome(result.outcome, result.end_condition, turn)
                 self.logger.save()

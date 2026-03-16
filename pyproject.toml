@@ -1,6 +1,6 @@
 [build-system]
 requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.backends.legacy:build"
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "the-ceo-breach"
@@ -10,7 +10,6 @@ requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2.0",
     "pyyaml>=6.0",
-    "structlog>=24.0",
     "openai>=1.0",
     "google-genai>=1.0",
     "requests>=2.31",
@@ -31,7 +30,8 @@ dev = [
 ]
 
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["."]
+include = ["src*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

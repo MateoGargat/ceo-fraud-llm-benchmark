@@ -37,3 +37,21 @@ def test_router_extracts_public_for_attacker():
     public = router.extract_public_messages(msgs)
     assert len(public) == 1
     assert public[0].content == "Bien reçu"
+
+
+def test_router_internal_targeted_delivery():
+    router = Router(defender_names=["comptable", "rh", "dsi"])
+    msg = Message(to="dsi", channel="internal", content="Check this with DSI")
+    internal = router.route_internal_messages([msg], sender="comptable")
+    assert "dsi" in internal
+    assert "rh" not in internal
+    assert "comptable" not in internal
+
+
+def test_router_internal_broadcast_on_securite_interne():
+    router = Router(defender_names=["comptable", "rh", "dsi"])
+    msg = Message(to="securite-interne", channel="internal", content="Alert everyone")
+    internal = router.route_internal_messages([msg], sender="dsi")
+    assert "comptable" in internal
+    assert "rh" in internal
+    assert "dsi" not in internal

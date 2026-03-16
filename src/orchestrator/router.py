@@ -17,9 +17,12 @@ class Router:
         deliveries: dict[str, list[Message]] = {}
         for msg in messages:
             if msg.channel == "internal":
-                for name in self.defender_names:
-                    if name != sender:
-                        deliveries.setdefault(name, []).append(msg)
+                if msg.to in self.defender_names and msg.to != sender:
+                    deliveries.setdefault(msg.to, []).append(msg)
+                elif msg.to == "securite-interne" or msg.to not in self.defender_names:
+                    for name in self.defender_names:
+                        if name != sender:
+                            deliveries.setdefault(name, []).append(msg)
         return deliveries
 
     def extract_public_messages(self, messages: list[Message]) -> list[Message]:

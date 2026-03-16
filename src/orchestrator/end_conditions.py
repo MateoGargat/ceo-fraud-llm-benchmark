@@ -18,13 +18,19 @@ def check_end_conditions(
 ) -> GameResult | None:
     if attacker and attacker.abort:
         return GameResult("WIN_DEFENDERS", "attaquant_abandonne", turn)
+
+    # Check defensive actions first (higher priority)
     for name, resp in defender_responses.items():
-        if resp.execute_transfer:
-            return GameResult("WIN_ATTACKER", "virement_execute", turn)
         if resp.declare_fraud:
             return GameResult("WIN_DEFENDERS", "fraude_detectee", turn)
         if resp.block_sender:
             return GameResult("WIN_DEFENDERS", "attaquant_bloque", turn)
+
+    # Then check attacker wins
+    for name, resp in defender_responses.items():
+        if resp.execute_transfer:
+            return GameResult("WIN_ATTACKER", "virement_execute", turn)
+
     if turn >= max_turns:
         return GameResult("STALEMATE", "timeout", turn)
     return None

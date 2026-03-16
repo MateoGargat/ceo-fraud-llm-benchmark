@@ -42,3 +42,31 @@ def test_timeout():
 def test_no_end_condition():
     result = check_end_conditions(turn=5, attacker=None, defender_responses={"comptable": _defender()})
     assert result is None
+
+
+def test_fraud_takes_priority_over_transfer():
+    """If one defender transfers and another declares fraud, fraud wins."""
+    comptable = _defender(execute_transfer=TransferAction(amount=250000, iban="FR76"))
+    dsi = _defender(declare_fraud=FraudDeclaration(target="attacker"))
+    result = check_end_conditions(
+        turn=5, attacker=None,
+        defender_responses={"comptable": comptable, "dsi": dsi},
+    )
+    assert result is not None
+    assert result.outcome == "WIN_DEFENDERS"
+    assert result.end_condition == "fraude_detectee"
+
+
+def test_contradictory_actions_fraud_wins():
+    """If same defender has both transfer and fraud, fraud wins."""
+    defender = _defender(
+        execute_transfer=TransferAction(amount=250000, iban="FR76"),
+        declare_fraud=FraudDeclaration(target="attacker"),
+    )
+    result = check_end_conditions(
+        turn=5, attacker=None,
+        defender_responses={"comptable": defender},
+    )
+    assert result is not None
+    assert result.outcome == "WIN_DEFENDERS"
+    assert result.end_condition == "fraude_detectee"

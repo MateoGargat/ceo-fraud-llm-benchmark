@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Literal
 import yaml
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 
 ModelName = Literal["gpt", "claude", "gemini", "deepseek", "grok", "codex"]
 
@@ -26,7 +26,26 @@ class RunConfig(BaseModel):
             raise ValueError(f"Roles must be exactly {required}, got {set(v.keys())}")
         return v
 
-def load_config(path: str) -> RunConfig:
+    @field_validator("temperature_attacker", "temperature_defenders", "temperature_ceo")
+    @classmethod
+    def validate_temperature(cls, v: float) -> float:
+        if not 0.0 <= v <= 2.0:
+            raise ValueError(f"Temperature must be between 0.0 and 2.0, got {v}")
+        return v
+
+    @model_validator(mode="after")
+    def validate_budget_coherence(self):
+        if self.max_cost_per_run_usd > self.max_total_budget_usd:
+            raise ValueError("Per-run budget cannot exceed total budget")
+        return self
+
+
+def load_config(path: str, base_path: str | None = None) -> RunConfig:
+    data: dict = {}
+    if base_path:
+        with open(base_path, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
     with open(path, "r", encoding="utf-8") as f:
-        data = yaml.safe_load(f)
+        run_data = yaml.safe_load(f)
+    data.update(run_data)
     return RunConfig(**data)

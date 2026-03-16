@@ -14,5 +14,8 @@ class StyleMatcher:
         att_emb = self.model.encode(attacker_messages)
         ceo_mean = np.mean(ceo_emb, axis=0)
         att_mean = np.mean(att_emb, axis=0)
-        cos_sim = float(np.dot(ceo_mean, att_mean) / (np.linalg.norm(ceo_mean) * np.linalg.norm(att_mean)))
+        norm_product = np.linalg.norm(ceo_mean) * np.linalg.norm(att_mean)
+        if norm_product == 0:
+            return 0.0
+        cos_sim = float(np.dot(ceo_mean, att_mean) / norm_product)
         return max(0.0, min(1.0, cos_sim))

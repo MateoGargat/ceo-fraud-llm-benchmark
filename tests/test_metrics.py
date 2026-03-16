@@ -34,3 +34,19 @@ def test_trust_drop_rate():
     tracker = TrustTracker(SAMPLE_LOG)
     rate = tracker.drop_rate("comptable")
     assert rate == -20.0
+
+
+def test_trust_change_rate():
+    tracker = TrustTracker(SAMPLE_LOG)
+    rate = tracker.change_rate("comptable")
+    assert rate == -20.0
+
+
+def test_trust_change_rate_positive():
+    log = {"trust_levels": [
+        {"turn": 1, "agent": "rh", "trust_level": 50, "apparent_trust": 50},
+        {"turn": 2, "agent": "rh", "trust_level": 80, "apparent_trust": 80},
+    ]}
+    tracker = TrustTracker(log)
+    rate = tracker.change_rate("rh")
+    assert rate == 30.0

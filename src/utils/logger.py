@@ -32,6 +32,7 @@ class SimulationLogger:
         })
 
     def log_outcome(self, outcome: str, end_condition: str, total_turns: int) -> None:
+        self.data["finished_at"] = datetime.now(timezone.utc).isoformat()
         self.data["outcome"] = {"outcome": outcome, "end_condition": end_condition, "total_turns": total_turns}
 
     def save(self) -> Path:

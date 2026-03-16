@@ -11,7 +11,7 @@ class TrustTracker:
     def get_apparent_trajectory(self, agent: str) -> list[int]:
         return [entry["apparent_trust"] for entry in sorted(self.trust_data, key=lambda x: x["turn"]) if entry["agent"] == agent]
 
-    def inflection_point(self, agent: str) -> int | None:
+    def first_decline_turn(self, agent: str) -> int | None:
         traj = self.get_trajectory(agent)
         for i in range(1, len(traj)):
             if traj[i] < traj[i - 1]:
@@ -32,8 +32,12 @@ class TrustTracker:
             return 0
         return max(abs(e["apparent_trust"] - e["trust_level"]) for e in entries)
 
-    def drop_rate(self, agent: str) -> float:
+    def change_rate(self, agent: str) -> float:
         traj = self.get_trajectory(agent)
         if len(traj) < 2:
             return 0.0
         return (traj[-1] - traj[0]) / (len(traj) - 1)
+
+    # Aliases for backward compatibility
+    inflection_point = first_decline_turn
+    drop_rate = change_rate

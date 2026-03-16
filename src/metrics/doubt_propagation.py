@@ -12,10 +12,10 @@ class DoubtPropagation:
     def internal_message_count(self) -> int:
         return len(self.internal_msgs)
 
-    def first_doubt_origin(self) -> str | None:
+    def first_internal_sender(self) -> str | None:
         return self.internal_msgs[0]["sender"] if self.internal_msgs else None
 
-    def propagation_chain(self) -> list[str]:
+    def sender_sequence(self) -> list[str]:
         senders = []
         for msg in self.internal_msgs:
             sender = msg["sender"]
@@ -27,3 +27,7 @@ class DoubtPropagation:
         if len(self.internal_msgs) < 2:
             return None
         return self.internal_msgs[-1]["turn"] - self.internal_msgs[0]["turn"]
+
+    # Aliases for backward compatibility
+    first_doubt_origin = first_internal_sender
+    propagation_chain = sender_sequence

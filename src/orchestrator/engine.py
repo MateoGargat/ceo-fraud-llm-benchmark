@@ -101,6 +101,7 @@ class SimulationEngine:
             try:
                 parsed_attacker = await self._call_and_parse_attacker(attacker, max_retries)
             except ParseError:
+                self.logger.log_inner_thought(turn, "attacker", "[PARSE_ERROR] Response unparseable after retries")
                 continue
             self.logger.log_inner_thought(turn, "attacker", parsed_attacker.inner_thought)
 
@@ -129,6 +130,7 @@ class SimulationEngine:
                 try:
                     parsed_def = await self._call_and_parse_defender(defenders[agent_name], channel, model, max_retries)
                 except ParseError:
+                    self.logger.log_inner_thought(turn, agent_name, "[PARSE_ERROR] Response unparseable after retries")
                     continue
                 defender_responses[agent_name] = parsed_def
                 self.logger.log_inner_thought(turn, agent_name, parsed_def.inner_thought)
@@ -155,6 +157,7 @@ class SimulationEngine:
                             try:
                                 parsed_cascade = await self._call_and_parse_defender(defenders[target_name], "internal", model, max_retries)
                             except ParseError:
+                                self.logger.log_inner_thought(turn, target_name, "[PARSE_ERROR] Cascade response unparseable after retries")
                                 continue
                             defender_responses[target_name] = parsed_cascade
                             self.logger.log_inner_thought(turn, target_name, parsed_cascade.inner_thought)

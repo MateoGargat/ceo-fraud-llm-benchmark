@@ -11,6 +11,9 @@ if not csv_path.exists():
 df = pd.read_csv(csv_path)
 col1, col2, col3 = st.columns(3)
 total = len(df)
+if total == 0:
+    st.warning("No data in outcomes.csv.")
+    st.stop()
 wins = len(df[df["outcome"] == "WIN_ATTACKER"])
 defenses = len(df[df["outcome"] == "WIN_DEFENDERS"])
 stalemates = len(df[df["outcome"] == "STALEMATE"])

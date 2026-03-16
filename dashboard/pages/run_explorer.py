@@ -21,8 +21,9 @@ st.metric("Outcome", outcome.get("outcome", "N/A"))
 st.metric("Turns", outcome.get("total_turns", "N/A"))
 st.subheader("Conversation Replay")
 for msg in log.get("messages", []):
-    icon = "lock" if msg["visibility"] == "internal" else "mail"
-    st.markdown(f"**[Turn {msg['turn']}] {msg['sender']} -> {msg['receiver']}** ({msg['channel']})")
+    visibility = msg.get("visibility", "public")
+    icon = "\U0001f512" if visibility == "internal" else "\U0001f4e7"
+    st.markdown(f"{icon} **[Turn {msg['turn']}] {msg['sender']} -> {msg['receiver']}** ({msg['channel']})")
     st.text(msg["content"])
     st.markdown("---")
 with st.expander("Inner Thoughts (private)"):

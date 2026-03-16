@@ -1,0 +1,12 @@
+run_id: "a3_rep2"
+attacker_model: "gemini"
+roles:
+  comptable: "deepseek"
+  rh: "claude"
+  dsi: "gpt"
+  ceo: "grok"
+max_turns: 30
+temperature_attacker: 0.9
+temperature_defenders: 0.3
+temperature_ceo: 0.7
+seed: 43

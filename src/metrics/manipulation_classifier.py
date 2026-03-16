@@ -14,7 +14,7 @@ class ManipulationClassifier:
     async def classify(self, conversation_log: str, ceo_corpus: str) -> dict:
         prompt = self.prompt_template.replace("{conversation_log}", conversation_log).replace("{ceo_corpus}", ceo_corpus)
         resp = await self.adapter.call(
-            system_prompt="Tu es un analyste expert en ingénierie sociale. Réponds uniquement en JSON valide.",
+            system_prompt="You are an expert social engineering analyst. Respond only in valid JSON.",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.1,
         )

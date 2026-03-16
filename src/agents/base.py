@@ -11,4 +11,4 @@ class AgentContext:
         self.message_history.append({"role": role, "content": content})
 
     def format_incoming(self, turn: int, sender: str, channel: str, content: str) -> str:
-        return f"[Tour {turn}][{channel}][{sender}] {content}"
+        return f"[Turn {turn}][{channel}][{sender}] {content}"

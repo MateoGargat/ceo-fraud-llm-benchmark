@@ -15,8 +15,8 @@ class RunConfig(BaseModel):
     temperature_ceo: float = 0.7
     max_turns: int = 30
     max_retries_format: int = 2
-    max_cost_per_run_eur: float = 10.0
-    max_total_budget_eur: float = 200.0
+    max_cost_per_run_usd: float = 10.0
+    max_total_budget_usd: float = 200.0
 
     @field_validator("roles")
     @classmethod

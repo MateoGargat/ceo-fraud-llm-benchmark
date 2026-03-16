@@ -21,7 +21,7 @@ class SimulationEngine:
         self.config = config
         self.output_dir = output_dir
         self.logger = SimulationLogger(output_dir=output_dir, run_id=config.run_id)
-        self.cost_tracker = CostTracker(max_per_run=config.max_cost_per_run_eur, max_total=config.max_total_budget_eur)
+        self.cost_tracker = CostTracker(max_per_run=config.max_cost_per_run_usd, max_total=config.max_total_budget_usd)
         if adapter_factory is None:
             from src.adapters.base import get_adapter
             self.adapter_factory = get_adapter

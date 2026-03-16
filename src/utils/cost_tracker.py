@@ -4,6 +4,8 @@ from __future__ import annotations
 class BudgetExceededError(Exception):
     pass
 
+
+# Pricing in USD per million tokens
 PRICING: dict[str, dict[str, float]] = {
     "gpt":      {"input": 5.0,  "output": 15.0},
     "grok":     {"input": 2.0,  "output": 6.0},
@@ -23,15 +25,20 @@ class CostTracker:
         self.history: list[dict] = []
 
     def add(self, model: str, input_tokens: int, output_tokens: int) -> float:
-        pricing = PRICING.get(model, {"input": 5.0, "output": 15.0})
+        if model not in PRICING:
+            raise ValueError(f"Unknown model: {model}. Available: {list(PRICING.keys())}")
+        pricing = PRICING[model]
         cost = (input_tokens / 1_000_000 * pricing["input"] + output_tokens / 1_000_000 * pricing["output"])
+
+        # Check BEFORE mutating
+        if self.run_total + cost > self.max_per_run:
+            raise BudgetExceededError(f"Run budget exceeded: {self.run_total + cost:.4f} > {self.max_per_run}")
+        if self.global_total + cost > self.max_total:
+            raise BudgetExceededError(f"Total budget exceeded: {self.global_total + cost:.4f} > {self.max_total}")
+
         self.run_total += cost
         self.global_total += cost
         self.history.append({"model": model, "input": input_tokens, "output": output_tokens, "cost": cost})
-        if self.run_total > self.max_per_run:
-            raise BudgetExceededError(f"Run budget exceeded: {self.run_total:.2f}€ > {self.max_per_run}€")
-        if self.global_total > self.max_total:
-            raise BudgetExceededError(f"Total budget exceeded: {self.global_total:.2f}€ > {self.max_total}€")
         return cost
 
     def new_run(self) -> None:

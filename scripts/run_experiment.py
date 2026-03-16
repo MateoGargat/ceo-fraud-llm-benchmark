@@ -6,7 +6,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.utils.config import load_config
-from src.utils.cost_tracker import BudgetExceededError
+from src.utils.cost_tracker import CostTracker, BudgetExceededError
 from src.orchestrator.engine import SimulationEngine
 
 
@@ -20,6 +20,14 @@ async def main():
         print(f"No YAML configs found in {configs_dir}")
         sys.exit(1)
     print(f"Found {len(config_files)} configs")
+
+    # Shared cost tracker across all runs
+    first_config = load_config(str(config_files[0]))
+    shared_tracker = CostTracker(
+        max_per_run=first_config.max_cost_per_run_usd,
+        max_total=first_config.max_total_budget_usd,
+    )
+
     results = []
     for config_path in config_files:
         config = load_config(str(config_path))
@@ -27,7 +35,9 @@ async def main():
         print(f"\n{'='*60}")
         print(f"Run: {config.run_id} | Attacker: {config.attacker_model}")
         try:
+            shared_tracker.new_run()
             engine = SimulationEngine(config=config, output_dir=output_dir)
+            engine.cost_tracker = shared_tracker
             result = await engine.run()
             results.append({"run_id": config.run_id, "outcome": result.outcome, "turn": result.turn})
             print(f"Result: {result.outcome} at turn {result.turn}")

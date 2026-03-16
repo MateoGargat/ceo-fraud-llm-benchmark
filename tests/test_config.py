@@ -10,7 +10,7 @@ def test_run_config_defaults():
     assert cfg.max_turns == 30
     assert cfg.temperature_attacker == 0.9
     assert cfg.temperature_defenders == 0.3
-    assert cfg.max_cost_per_run_eur == 10.0
+    assert cfg.max_cost_per_run_usd == 10.0
     assert cfg.seed == 42
 
 def test_run_config_validation_rejects_unknown_model():

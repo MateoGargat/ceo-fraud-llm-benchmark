@@ -136,7 +136,7 @@ async def test_engine_handles_budget_exceeded(tmp_path):
         attacker_model="gpt",
         roles={"comptable": "gpt", "rh": "gpt", "dsi": "gpt", "ceo": "gpt"},
         max_turns=5,
-        max_cost_per_run_eur=0.0001,
+        max_cost_per_run_usd=0.0001,
     )
 
     async def mock_call(system_prompt, messages, temperature=0.7):

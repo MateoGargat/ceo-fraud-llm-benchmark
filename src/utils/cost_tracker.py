@@ -10,6 +10,7 @@ PRICING: dict[str, dict[str, float]] = {
     "deepseek": {"input": 0.14, "output": 0.28},
     "claude":   {"input": 0.0,  "output": 0.0},
     "gemini":   {"input": 0.0,  "output": 0.0},
+    "codex":    {"input": 0.0,  "output": 0.0},
 }
 
 

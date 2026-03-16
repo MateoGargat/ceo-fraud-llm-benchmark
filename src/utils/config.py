@@ -3,7 +3,7 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, field_validator
 
-ModelName = Literal["gpt", "claude", "gemini", "deepseek", "grok"]
+ModelName = Literal["gpt", "claude", "gemini", "deepseek", "grok", "codex"]
 
 class RunConfig(BaseModel):
     run_id: str

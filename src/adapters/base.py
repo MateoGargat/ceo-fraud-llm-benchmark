@@ -27,11 +27,13 @@ def get_adapter(model: str) -> BaseAdapter:
     from src.adapters.openai_sdk import OpenAIAdapter
     from src.adapters.deepseek_sdk import DeepSeekAdapter
     from src.adapters.xai_sdk import XAIAdapter
+    from src.adapters.codex_cli import CodexCLIAdapter
 
     adapters: dict[str, type[BaseAdapter]] = {
         "claude": ClaudeCLIAdapter,
         "gemini": GeminiCLIAdapter,
         "gpt": OpenAIAdapter,
+        "codex": CodexCLIAdapter,
         "deepseek": DeepSeekAdapter,
         "grok": XAIAdapter,
     }

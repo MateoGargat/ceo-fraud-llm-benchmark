@@ -1,5 +1,5 @@
 from __future__ import annotations
-from src.adapters.base import BaseAdapter
+from src.adapters.base import BaseAdapter, AdapterResponse
 from src.paths import PROMPTS_DIR
 
 PROMPT_PATH = PROMPTS_DIR / "system" / "ceo.md"
@@ -10,6 +10,6 @@ class CEOProfiler:
         self.temperature = temperature
         self.prompt = PROMPT_PATH.read_text(encoding="utf-8")
 
-    async def generate(self) -> str:
+    async def generate(self) -> tuple[str, AdapterResponse]:
         resp = await self.adapter.call(system_prompt=self.prompt, messages=[], temperature=self.temperature)
-        return resp.text
+        return resp.text, resp

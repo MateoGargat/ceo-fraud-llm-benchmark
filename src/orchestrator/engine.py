@@ -3,7 +3,7 @@ from typing import Callable
 
 from src.utils.config import RunConfig
 from src.utils.logger import SimulationLogger
-from src.utils.cost_tracker import CostTracker
+from src.utils.cost_tracker import CostTracker, BudgetExceededError
 from src.adapters.base import BaseAdapter, AdapterResponse
 from src.agents.attacker import AttackerAgent
 from src.agents.defender import DefenderAgent
@@ -30,26 +30,63 @@ class SimulationEngine:
         self.router = Router(defender_names=["comptable", "rh", "dsi"])
         self.deferred_internal: list[tuple[str, Message]] = []
 
+    async def _call_and_parse_attacker(self, attacker, max_retries: int):
+        """Call attacker and parse response, retrying on ParseError."""
+        for attempt in range(max_retries + 1):
+            raw, resp = await attacker.act()
+            self.cost_tracker.add(self.config.attacker_model, resp.input_tokens, resp.output_tokens)
+            try:
+                parsed = parse_attacker_response(raw)
+                return parsed
+            except ParseError:
+                if attempt < max_retries:
+                    attacker.context.message_history.pop()
+                    continue
+                raise
+
+    async def _call_and_parse_defender(self, defender, channel: str, model: str, max_retries: int):
+        """Call defender and parse response, retrying on ParseError."""
+        for attempt in range(max_retries + 1):
+            raw, resp = await defender.act(channel=channel)
+            self.cost_tracker.add(model, resp.input_tokens, resp.output_tokens)
+            try:
+                parsed = parse_defender_response(raw)
+                return parsed
+            except ParseError:
+                if attempt < max_retries:
+                    defender.context.message_history.pop()
+                    continue
+                raise
+
     async def run(self) -> GameResult:
-        # Phase 0: Generate CEO profile
-        ceo_adapter = self.adapter_factory(self.config.roles["ceo"])
-        profiler = CEOProfiler(adapter=ceo_adapter, temperature=self.config.temperature_ceo)
-        ceo_corpus = await profiler.generate()
+        try:
+            ceo_adapter = self.adapter_factory(self.config.roles["ceo"])
+            profiler = CEOProfiler(adapter=ceo_adapter, temperature=self.config.temperature_ceo)
+            ceo_corpus, ceo_resp = await profiler.generate()
+            ceo_model = self.config.roles["ceo"]
+            self.cost_tracker.add(ceo_model, ceo_resp.input_tokens, ceo_resp.output_tokens)
 
-        # Init attacker
-        attacker_adapter = self.adapter_factory(self.config.attacker_model)
-        attacker = AttackerAgent(adapter=attacker_adapter, ceo_corpus=ceo_corpus, temperature=self.config.temperature_attacker)
+            attacker_adapter = self.adapter_factory(self.config.attacker_model)
+            attacker = AttackerAgent(adapter=attacker_adapter, ceo_corpus=ceo_corpus, temperature=self.config.temperature_attacker)
 
-        # Init defenders
-        defenders: dict[str, DefenderAgent] = {}
-        for role in ["comptable", "rh", "dsi"]:
-            model = self.config.roles[role]
-            adapter = self.adapter_factory(model)
-            prompt_path = PROMPT_DIR / f"{role}.md"
-            template = prompt_path.read_text(encoding="utf-8") if prompt_path.exists() else f"Tu es {role}."
-            defenders[role] = DefenderAgent(adapter=adapter, role=role, prompt_template=template, temperature=self.config.temperature_defenders)
+            defenders: dict[str, DefenderAgent] = {}
+            for role in ["comptable", "rh", "dsi"]:
+                model = self.config.roles[role]
+                adapter = self.adapter_factory(model)
+                prompt_path = PROMPT_DIR / f"{role}.md"
+                template = prompt_path.read_text(encoding="utf-8") if prompt_path.exists() else f"Tu es {role}."
+                defenders[role] = DefenderAgent(adapter=adapter, role=role, prompt_template=template, temperature=self.config.temperature_defenders)
 
-        # Game loop
+            max_retries = self.config.max_retries_format
+
+            return await self._game_loop(attacker, defenders, max_retries)
+        except BudgetExceededError:
+            final = GameResult("STALEMATE", "budget_exceeded", 0)
+            self.logger.log_outcome(final.outcome, final.end_condition, final.turn)
+            self.logger.save()
+            return final
+
+    async def _game_loop(self, attacker, defenders, max_retries) -> GameResult:
         for turn in range(1, self.config.max_turns + 1):
             # Step 0: Inject deferred internal messages
             for sender, msg in self.deferred_internal:
@@ -59,15 +96,16 @@ class SimulationEngine:
                         defenders[agent_name].receive_message(turn, sender, "internal", m.content)
             self.deferred_internal.clear()
 
-            # Step 1: Attacker turn
-            raw_attacker, attacker_resp = await attacker.act()
-            self.cost_tracker.add(self.config.attacker_model, attacker_resp.input_tokens, attacker_resp.output_tokens)
-            parsed_attacker = parse_attacker_response(raw_attacker)
+            # Step 1: Attacker turn (with retry)
+            try:
+                parsed_attacker = await self._call_and_parse_attacker(attacker, max_retries)
+            except ParseError:
+                continue
             self.logger.log_inner_thought(turn, "attacker", parsed_attacker.inner_thought)
 
             # Check attacker abort
-            result = check_end_conditions(turn, parsed_attacker, {}, max_turns=self.config.max_turns)
-            if result:
+            if parsed_attacker.abort:
+                result = GameResult("WIN_DEFENDERS", "attaquant_abandonne", turn)
                 self.logger.log_outcome(result.outcome, result.end_condition, turn)
                 self.logger.save()
                 return result
@@ -80,18 +118,18 @@ class SimulationEngine:
                 for msg in msgs:
                     defenders[agent_name].receive_message(turn, "Marcus Chen", msg.channel, msg.content)
 
-            # Step 3: Defender turns
+            # Step 3: Defender turns (with retry)
             defender_responses = {}
             for agent_name in deliveries:
                 if agent_name not in defenders:
                     continue
                 channel = deliveries[agent_name][0].channel if deliveries[agent_name] else "email"
-                raw_def, def_resp = await defenders[agent_name].act(channel=channel)
                 model = self.config.roles.get(agent_name, "claude")
-                self.cost_tracker.add(model, def_resp.input_tokens, def_resp.output_tokens)
-                parsed_def = parse_defender_response(raw_def)
+                try:
+                    parsed_def = await self._call_and_parse_defender(defenders[agent_name], channel, model, max_retries)
+                except ParseError:
+                    continue
                 defender_responses[agent_name] = parsed_def
-
                 self.logger.log_inner_thought(turn, agent_name, parsed_def.inner_thought)
                 self.logger.log_trust(turn, agent_name, parsed_def.trust_level, parsed_def.apparent_trust)
                 for msg in parsed_def.messages:
@@ -112,10 +150,11 @@ class SimulationEngine:
                         if target_name not in defender_responses:
                             for m in msgs:
                                 defenders[target_name].receive_message(turn, sender, "internal", m.content)
-                            raw_cascade, cascade_resp = await defenders[target_name].act(channel="internal")
                             model = self.config.roles.get(target_name, "claude")
-                            self.cost_tracker.add(model, cascade_resp.input_tokens, cascade_resp.output_tokens)
-                            parsed_cascade = parse_defender_response(raw_cascade)
+                            try:
+                                parsed_cascade = await self._call_and_parse_defender(defenders[target_name], "internal", model, max_retries)
+                            except ParseError:
+                                continue
                             defender_responses[target_name] = parsed_cascade
                             self.logger.log_inner_thought(turn, target_name, parsed_cascade.inner_thought)
                             self.logger.log_trust(turn, target_name, parsed_cascade.trust_level, parsed_cascade.apparent_trust)
@@ -125,6 +164,9 @@ class SimulationEngine:
                             for m in parsed_cascade.messages:
                                 visibility = "internal" if m.channel == "internal" else "public"
                                 self.logger.log_message(turn, target_name, m.to, m.channel, m.content, visibility)
+                        else:
+                            for m in msgs:
+                                self.deferred_internal.append((sender, m))
 
             # Step 5: Public responses back to attacker
             all_public = []

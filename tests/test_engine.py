@@ -91,3 +91,62 @@ async def test_engine_respects_max_turns(tmp_path):
     )
     result = await engine.run()
     assert result.outcome == "STALEMATE"
+
+
+@pytest.mark.asyncio
+async def test_engine_retries_on_malformed_response(tmp_path):
+    config = RunConfig(
+        run_id="test_retry",
+        attacker_model="claude",
+        roles={"comptable": "deepseek", "rh": "claude", "dsi": "gemini", "ceo": "grok"},
+        max_turns=5,
+        max_retries_format=2,
+    )
+    call_count = {"n": 0}
+
+    async def mock_call(system_prompt, messages, temperature=0.7):
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            # CEO profiler
+            return AdapterResponse(text="CEO style direct", input_tokens=50, output_tokens=50)
+        if call_count["n"] == 2:
+            # First attacker attempt: malformed
+            return AdapterResponse(text="This is garbage", input_tokens=50, output_tokens=50)
+        if call_count["n"] == 3:
+            # Retry: valid attacker response
+            return AdapterResponse(text=ATTACKER_RESP, input_tokens=100, output_tokens=80)
+        if call_count["n"] == 4:
+            # Defender executes transfer
+            return AdapterResponse(text=DEFENDER_RESP_EXECUTE, input_tokens=100, output_tokens=80)
+        return AdapterResponse(text=DEFENDER_RESP_NORMAL, input_tokens=50, output_tokens=50)
+
+    engine = SimulationEngine(
+        config=config,
+        output_dir=str(tmp_path),
+        adapter_factory=lambda model: AsyncMock(call=mock_call),
+    )
+    result = await engine.run()
+    assert result.outcome == "WIN_ATTACKER"
+
+
+@pytest.mark.asyncio
+async def test_engine_handles_budget_exceeded(tmp_path):
+    config = RunConfig(
+        run_id="test_budget",
+        attacker_model="gpt",
+        roles={"comptable": "gpt", "rh": "gpt", "dsi": "gpt", "ceo": "gpt"},
+        max_turns=5,
+        max_cost_per_run_eur=0.0001,
+    )
+
+    async def mock_call(system_prompt, messages, temperature=0.7):
+        return AdapterResponse(text=ATTACKER_RESP, input_tokens=1_000_000, output_tokens=1_000_000)
+
+    engine = SimulationEngine(
+        config=config,
+        output_dir=str(tmp_path),
+        adapter_factory=lambda model: AsyncMock(call=mock_call),
+    )
+    result = await engine.run()
+    assert result.outcome == "STALEMATE"
+    assert result.end_condition == "budget_exceeded"

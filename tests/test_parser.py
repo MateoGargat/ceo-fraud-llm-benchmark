@@ -109,3 +109,55 @@ def test_parse_malformed_xml_raises_parse_error():
     from src.orchestrator.parser import ParseError
     with pytest.raises(ParseError):
         parse_attacker_response("This is not XML at all")
+
+
+def test_parse_defender_trust_level_clamped_to_100():
+    xml = """
+<inner_thought>Thinking</inner_thought>
+<trust_level value="9999">Way too high</trust_level>
+<apparent_trust value="150">Also too high</apparent_trust>
+<actions><wait/></actions>
+"""
+    result = parse_defender_response(xml)
+    assert result.trust_level == 100
+    assert result.apparent_trust == 100
+
+
+def test_parse_defender_trust_level_clamped_to_0():
+    xml = """
+<inner_thought>Thinking</inner_thought>
+<trust_level value="-50">Negative</trust_level>
+<apparent_trust value="-10">Also negative</apparent_trust>
+<actions><wait/></actions>
+"""
+    result = parse_defender_response(xml)
+    assert result.trust_level == 0
+    assert result.apparent_trust == 0
+
+
+def test_parse_defender_negative_transfer_raises():
+    from src.orchestrator.parser import ParseError
+    xml = """
+<inner_thought>Transfer</inner_thought>
+<trust_level value="80">OK</trust_level>
+<apparent_trust value="80">OK</apparent_trust>
+<actions>
+  <execute_transfer amount="-100" iban="FR76123"/>
+</actions>
+"""
+    with pytest.raises(ParseError, match="positive"):
+        parse_defender_response(xml)
+
+
+def test_parse_defender_zero_transfer_raises():
+    from src.orchestrator.parser import ParseError
+    xml = """
+<inner_thought>Transfer</inner_thought>
+<trust_level value="80">OK</trust_level>
+<apparent_trust value="80">OK</apparent_trust>
+<actions>
+  <execute_transfer amount="0" iban="FR76123"/>
+</actions>
+"""
+    with pytest.raises(ParseError, match="positive"):
+        parse_defender_response(xml)

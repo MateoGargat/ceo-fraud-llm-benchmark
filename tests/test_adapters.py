@@ -72,6 +72,22 @@ async def test_openai_adapter_passes_seed_to_api():
 
 
 @pytest.mark.asyncio
+async def test_openai_adapter_handles_empty_choices():
+    """Verify adapter returns empty response when choices list is empty."""
+    with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}):
+        from src.adapters.openai_sdk import OpenAIAdapter
+        adapter = OpenAIAdapter()
+        mock_response = MagicMock()
+        mock_response.choices = []
+        adapter.client = AsyncMock()
+        adapter.client.chat.completions.create.return_value = mock_response
+        result = await adapter.call("system", [{"role": "user", "content": "hi"}])
+        assert result.text == ""
+        assert result.input_tokens == 0
+        assert result.output_tokens == 0
+
+
+@pytest.mark.asyncio
 async def test_openai_adapter_omits_seed_when_none():
     """Verify seed is not passed when None."""
     with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}):

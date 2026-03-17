@@ -12,7 +12,10 @@ if not log_files:
     st.warning("No run logs found.")
     st.stop()
 selected = st.selectbox("Select a run", [f.stem for f in log_files])
-log_path = next(f for f in log_files if f.stem == selected)
+log_path = next((f for f in log_files if f.stem == selected), None)
+if log_path is None:
+    st.error(f"Log file not found: {selected}")
+    st.stop()
 with open(log_path, encoding="utf-8") as f:
     log = json.load(f)
 st.subheader(f"Run: {log['run_id']}")

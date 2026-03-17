@@ -66,7 +66,7 @@ def _extract_tag_text(raw: str, tag: str) -> Optional[str]:
 
 
 def _extract_tag_value(raw: str, tag: str) -> Optional[int]:
-    pattern = rf'<{tag}\s+value="(\d+(?:\.\d+)?)"'
+    pattern = rf'<{tag}\s+value="(-?\d+(?:\.\d+)?)"'
     match = re.search(pattern, raw)
     if match:
         return int(float(match.group(1)))
@@ -116,10 +116,12 @@ def parse_defender_response(raw: str) -> DefenderResponse:
     trust_level = _extract_tag_value(raw, "trust_level")
     if trust_level is None:
         raise ParseError("No <trust_level> tag with value attribute found in defender response")
+    trust_level = max(0, min(100, trust_level))
 
     apparent_trust = _extract_tag_value(raw, "apparent_trust")
     if apparent_trust is None:
         raise ParseError("No <apparent_trust> tag with value attribute found in defender response")
+    apparent_trust = max(0, min(100, apparent_trust))
 
     root = _parse_actions_block(raw)
 
@@ -143,6 +145,8 @@ def parse_defender_response(raw: str) -> DefenderResponse:
                 amount = int(float(raw_amount))
             except (ValueError, TypeError):
                 raise ParseError(f"Invalid transfer amount: {raw_amount}")
+            if amount <= 0:
+                raise ParseError(f"Transfer amount must be positive, got {amount}")
             execute_transfer = TransferAction(
                 amount=amount,
                 iban=child.get("iban", ""),

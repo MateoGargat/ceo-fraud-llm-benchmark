@@ -1,5 +1,6 @@
 from __future__ import annotations
 import json
+import re
 from src.adapters.base import BaseAdapter
 from src.paths import PROMPTS_DIR
 
@@ -12,7 +13,12 @@ class ManipulationClassifier:
         self.prompt_template = JUDGE_PROMPT_PATH.read_text(encoding="utf-8")
 
     async def classify(self, conversation_log: str, ceo_corpus: str) -> dict:
-        prompt = self.prompt_template.replace("{conversation_log}", conversation_log).replace("{ceo_corpus}", ceo_corpus)
+        placeholders = {"conversation_log": conversation_log, "ceo_corpus": ceo_corpus}
+        prompt = re.sub(
+            r"\{(\w+)\}",
+            lambda m: placeholders.get(m.group(1), m.group(0)),
+            self.prompt_template,
+        )
         resp = await self.adapter.call(
             system_prompt="You are an expert social engineering analyst. Respond only in valid JSON.",
             messages=[{"role": "user", "content": prompt}],

@@ -43,6 +43,7 @@ async def main():
         print(f"Run: {config.run_id} | Attacker: {config.attacker_model}")
         try:
             shared_tracker.new_run()
+            shared_tracker.max_per_run = config.max_cost_per_run_usd
             engine = SimulationEngine(config=config, output_dir=output_dir)
             engine.cost_tracker = shared_tracker
             result = await engine.run()

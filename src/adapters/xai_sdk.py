@@ -19,6 +19,8 @@ class XAIAdapter(BaseAdapter):
         if self.seed is not None:
             kwargs["seed"] = self.seed
         response = await self.client.chat.completions.create(**kwargs)
+        if not response.choices:
+            return AdapterResponse(text="", input_tokens=0, output_tokens=0)
         choice = response.choices[0]
         usage = response.usage
         return AdapterResponse(

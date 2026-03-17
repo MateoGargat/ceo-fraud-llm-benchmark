@@ -9,7 +9,10 @@ from src.utils.cost_tracker import PRICING
 
 
 def estimate_run(config_path: str) -> dict:
-    config = load_config(config_path)
+    path = Path(config_path)
+    base_candidates = [path.parent / "base.yaml", path.parent.parent / "base.yaml"]
+    base_path = next((p for p in base_candidates if p.exists()), None)
+    config = load_config(config_path, base_path=str(base_path) if base_path else None)
     tokens_per_agent_per_turn_in = 500
     tokens_per_agent_per_turn_out = 300
     est_turns = config.max_turns // 2

@@ -24,3 +24,16 @@ def test_propagation_chain():
 def test_propagation_delay():
     dp = DoubtPropagation(SAMPLE_LOG)
     assert dp.propagation_delay() == 1
+
+
+def test_propagation_chain_keeps_loops():
+    log = {
+        "messages": [
+            {"turn": 3, "sender": "dsi", "receiver": "securite-interne", "channel": "internal", "visibility": "internal", "content": "Weird email"},
+            {"turn": 4, "sender": "rh", "receiver": "securite-interne", "channel": "internal", "visibility": "internal", "content": "Agreed"},
+            {"turn": 5, "sender": "dsi", "receiver": "securite-interne", "channel": "internal", "visibility": "internal", "content": "Confirmed"},
+        ],
+        "trust_levels": [],
+    }
+    dp = DoubtPropagation(log)
+    assert dp.propagation_chain() == ["dsi -> rh", "rh -> dsi"]

@@ -15,12 +15,13 @@ def extract_run(log_path: Path) -> dict:
     with open(log_path, encoding="utf-8") as f:
         log = json.load(f)
     run_id = log["run_id"]
-    outcome = log.get("outcome", {})
+    outcome = log.get("outcome") or {}
     trust = TrustTracker(log)
     channels = ChannelAnalyzer(log)
     doubt = DoubtPropagation(log)
     return {
         "run_id": run_id,
+        "log_status": "complete" if outcome else "incomplete",
         "outcome": outcome.get("outcome", "UNKNOWN"),
         "end_condition": outcome.get("end_condition", ""),
         "total_turns": outcome.get("total_turns", 0),
@@ -39,11 +40,12 @@ def extract_run(log_path: Path) -> dict:
     }
 
 
-def main():
-    raw_dir = Path("data/raw")
+def main(raw_dir: Path | str | None = None, processed_dir: Path | str | None = None) -> int:
+    raw_dir = Path(raw_dir) if raw_dir is not None else Path("data/raw")
+    processed_dir = Path(processed_dir) if processed_dir is not None else Path("data/processed")
     if not raw_dir.exists():
-        print("No data/raw directory found")
-        sys.exit(1)
+        print(f"No raw data directory found: {raw_dir}")
+        return 1
     rows = []
     for log_file in sorted(raw_dir.rglob("*.json")):
         try:
@@ -52,13 +54,15 @@ def main():
             print(f"Error processing {log_file}: {e}")
     if rows:
         df = pd.DataFrame(rows)
-        out = Path("data/processed")
-        out.mkdir(parents=True, exist_ok=True)
-        df.to_csv(out / "outcomes.csv", index=False)
-        print(f"Extracted {len(rows)} runs -> data/processed/outcomes.csv")
-    else:
-        print("No runs found to extract")
+        processed_dir.mkdir(parents=True, exist_ok=True)
+        output_path = processed_dir / "outcomes.csv"
+        df.to_csv(output_path, index=False)
+        print(f"Extracted {len(rows)} runs -> {output_path}")
+        return 0
+
+    print("No runs found to extract")
+    return 1
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

@@ -9,6 +9,10 @@ class ParseError(Exception):
     pass
 
 
+PUBLIC_CHANNELS = {"email", "slack", "phone"}
+ALL_CHANNELS = PUBLIC_CHANNELS | {"internal"}
+
+
 @dataclass
 class Message:
     to: str
@@ -57,6 +61,22 @@ class DefenderResponse:
     block_sender: Optional[BlockSender] = None
 
 
+def _parse_message(child: ET.Element, allowed_channels: set[str]) -> Message:
+    target = (child.get("to", "") or "").strip()
+    if not target:
+        raise ParseError("Message target is required")
+
+    channel = (child.get("channel", "") or "").strip()
+    if channel not in allowed_channels:
+        raise ParseError(f"Invalid message channel: {channel}")
+
+    content = (child.text or "").strip()
+    if not content:
+        raise ParseError("Message content is required")
+
+    return Message(to=target, channel=channel, content=content)
+
+
 def _extract_tag_text(raw: str, tag: str) -> Optional[str]:
     pattern = rf"<{tag}[^>]*>(.*?)</{tag}>"
     match = re.search(pattern, raw, re.DOTALL)
@@ -97,11 +117,7 @@ def parse_attacker_response(raw: str) -> AttackerResponse:
 
     for child in root:
         if child.tag == "message":
-            messages.append(Message(
-                to=child.get("to", ""),
-                channel=child.get("channel", ""),
-                content=(child.text or "").strip(),
-            ))
+            messages.append(_parse_message(child, PUBLIC_CHANNELS))
         elif child.tag == "abort":
             abort = AbortAction(reason=child.get("reason", ""))
 
@@ -134,11 +150,7 @@ def parse_defender_response(raw: str) -> DefenderResponse:
 
     for child in root:
         if child.tag == "message":
-            messages.append(Message(
-                to=child.get("to", ""),
-                channel=child.get("channel", ""),
-                content=(child.text or "").strip(),
-            ))
+            messages.append(_parse_message(child, ALL_CHANNELS))
         elif child.tag == "execute_transfer":
             raw_amount = child.get("amount", "0")
             try:
@@ -147,18 +159,42 @@ def parse_defender_response(raw: str) -> DefenderResponse:
                 raise ParseError(f"Invalid transfer amount: {raw_amount}")
             if amount <= 0:
                 raise ParseError(f"Transfer amount must be positive, got {amount}")
+            iban = (child.get("iban", "") or "").strip()
+            if not iban:
+                raise ParseError("Transfer IBAN is required")
             execute_transfer = TransferAction(
                 amount=amount,
-                iban=child.get("iban", ""),
+                iban=iban,
             )
         elif child.tag == "refuse_transfer":
-            refuse_transfer = child.get("reason", "")
+            reason = (child.get("reason", "") or "").strip()
+            if not reason:
+                raise ParseError("Refusal reason is required")
+            refuse_transfer = reason
         elif child.tag == "declare_fraud":
-            declare_fraud = FraudDeclaration(target=child.get("target", ""))
+            target = (child.get("target", "") or "").strip()
+            if not target:
+                raise ParseError("Fraud target is required")
+            declare_fraud = FraudDeclaration(target=target)
         elif child.tag == "block_sender":
-            block_sender = BlockSender(target=child.get("target", ""))
+            target = (child.get("target", "") or "").strip()
+            if not target:
+                raise ParseError("Block target is required")
+            block_sender = BlockSender(target=target)
         elif child.tag == "wait":
             is_wait = True
+
+    terminal_actions = [
+        execute_transfer is not None,
+        refuse_transfer is not None,
+        declare_fraud is not None,
+        block_sender is not None,
+        is_wait,
+    ]
+    if sum(terminal_actions) > 1:
+        raise ParseError("Found conflicting terminal actions in defender response")
+    if is_wait and messages:
+        raise ParseError("Found conflicting wait action with messages in defender response")
 
     return DefenderResponse(
         inner_thought=inner_thought,

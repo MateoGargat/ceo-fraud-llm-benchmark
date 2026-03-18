@@ -32,5 +32,11 @@ dev = [
 where = ["."]
 include = ["src*"]
 
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.package-data]
+src = ["prompts/**/*.md"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

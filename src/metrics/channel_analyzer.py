@@ -5,8 +5,8 @@ from collections import Counter
 class ChannelAnalyzer:
     def __init__(self, log_data: dict):
         self.attacker_msgs = sorted(
-            [m for m in log_data.get("messages", []) if m["sender"] == "attacker"],
-            key=lambda m: m["turn"],
+            [{**m, "_order": i} for i, m in enumerate(log_data.get("messages", [])) if m.get("sender") == "attacker"],
+            key=lambda m: (m["turn"], m["_order"]),
         )
 
     def channels_used(self) -> dict[str, int]:
@@ -29,4 +29,9 @@ class ChannelAnalyzer:
     def channel_switches(self) -> int:
         if len(self.attacker_msgs) < 2:
             return 0
-        return sum(1 for i in range(1, len(self.attacker_msgs)) if self.attacker_msgs[i]["channel"] != self.attacker_msgs[i-1]["channel"])
+        return sum(
+            1
+            for i in range(1, len(self.attacker_msgs))
+            if self.attacker_msgs[i]["receiver"] == self.attacker_msgs[i - 1]["receiver"]
+            and self.attacker_msgs[i]["channel"] != self.attacker_msgs[i - 1]["channel"]
+        )

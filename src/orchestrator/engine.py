@@ -1,10 +1,11 @@
 from __future__ import annotations
+from collections import defaultdict, deque
 from typing import Callable
 
 from src.utils.config import RunConfig
 from src.utils.logger import SimulationLogger
 from src.utils.cost_tracker import CostTracker, BudgetExceededError
-from src.adapters.base import BaseAdapter, AdapterResponse
+from src.adapters.base import AdapterError, BaseAdapter, AdapterResponse
 from src.agents.attacker import AttackerAgent
 from src.agents.defender import DefenderAgent
 from src.agents.ceo_profiler import CEOProfiler
@@ -30,7 +31,8 @@ class SimulationEngine:
             self.adapter_factory = adapter_factory
         defender_roles = [r for r in config.roles if r != "ceo"]
         self.router = Router(defender_names=defender_roles)
-        self.deferred_internal: list[tuple[str, Message]] = []
+        self.deferred_messages: list[tuple[str, str, Message]] = []
+        self.current_turn = 0
 
     async def _call_and_parse_attacker(self, attacker, max_retries: int):
         """Call attacker and parse response, retrying on ParseError."""
@@ -46,10 +48,10 @@ class SimulationEngine:
                     continue
                 raise
 
-    async def _call_and_parse_defender(self, defender, channel: str, model: str, max_retries: int):
+    async def _call_and_parse_defender(self, defender, channels: list[str], model: str, max_retries: int):
         """Call defender and parse response, retrying on ParseError."""
         for attempt in range(max_retries + 1):
-            raw, resp = await defender.act(channel=channel)
+            raw, resp = await defender.act(channels=channels)
             self.cost_tracker.add(model, resp.input_tokens, resp.output_tokens)
             try:
                 parsed = parse_defender_response(raw)
@@ -87,52 +89,79 @@ class SimulationEngine:
             self.logger.log_outcome(final.outcome, final.end_condition, final.turn)
             self.logger.save()
             return final
+        except AdapterError as exc:
+            self.logger.log_inner_thought(self.current_turn, "system", f"[ADAPTER_ERROR] {exc}")
+            final = GameResult("STALEMATE", "adapter_failure", self.current_turn)
+            self.logger.log_outcome(final.outcome, final.end_condition, final.turn)
+            self.logger.save()
+            return final
 
     async def _game_loop(self, attacker, defenders, max_retries) -> GameResult:
         for turn in range(1, self.config.max_turns + 1):
-            # Step 0: Inject deferred internal messages
-            for sender, msg in self.deferred_internal:
-                internal_deliveries = self.router.route_internal_messages([msg], sender=sender)
-                for agent_name, msgs in internal_deliveries.items():
-                    for m in msgs:
-                        defenders[agent_name].receive_message(turn, sender, "internal", m.content)
-            self.deferred_internal.clear()
+            self.current_turn = turn
+            defender_responses = {}
+            public_to_attacker = []
+            pending_channels: dict[str, list[str]] = defaultdict(list)
+            defender_queue: deque[str] = deque()
+            queued_agents: set[str] = set()
+            acted_this_turn: set[str] = set()
+
+            # Step 0: Inject deferred defender messages
+            for recipient, sender, msg in self.deferred_messages:
+                if recipient not in defenders:
+                    continue
+                defenders[recipient].receive_message(turn, sender, msg.channel, msg.content)
+                pending_channels[recipient].append(msg.channel)
+                if recipient not in queued_agents:
+                    defender_queue.append(recipient)
+                    queued_agents.add(recipient)
+            self.deferred_messages.clear()
 
             # Step 1: Attacker turn (with retry)
             try:
                 parsed_attacker = await self._call_and_parse_attacker(attacker, max_retries)
             except ParseError:
                 self.logger.log_inner_thought(turn, "attacker", "[PARSE_ERROR] Response unparseable after retries")
-                continue
-            self.logger.log_inner_thought(turn, "attacker", parsed_attacker.inner_thought)
+            else:
+                self.logger.log_inner_thought(turn, "attacker", parsed_attacker.inner_thought)
 
-            # Check attacker abort
-            if parsed_attacker.abort:
-                result = GameResult("WIN_DEFENDERS", "attaquant_abandonne", turn)
-                self.logger.log_outcome(result.outcome, result.end_condition, turn)
-                self.logger.save()
-                return result
+                # Check attacker abort
+                if parsed_attacker.abort:
+                    result = GameResult("WIN_DEFENDERS", "attaquant_abandonne", turn)
+                    self.logger.log_outcome(result.outcome, result.end_condition, turn)
+                    self.logger.save()
+                    return result
 
-            # Step 2: Route attacker messages
-            for msg in parsed_attacker.messages:
-                self.logger.log_message(turn, "attacker", msg.to, msg.channel, msg.content, "public")
-            deliveries = self.router.route_attacker_messages(parsed_attacker.messages)
-            for agent_name, msgs in deliveries.items():
-                for msg in msgs:
-                    defenders[agent_name].receive_message(turn, "Marcus Chen", msg.channel, msg.content)
+                # Step 2: Route attacker messages
+                for msg in parsed_attacker.messages:
+                    self.logger.log_message(turn, "attacker", msg.to, msg.channel, msg.content, "public")
+                deliveries = self.router.route_attacker_messages(parsed_attacker.messages)
+                for agent_name, msgs in deliveries.items():
+                    if agent_name not in defenders:
+                        continue
+                    for msg in msgs:
+                        defenders[agent_name].receive_message(turn, "Marcus Chen", msg.channel, msg.content)
+                        pending_channels[agent_name].append(msg.channel)
+                    if agent_name not in queued_agents:
+                        defender_queue.append(agent_name)
+                        queued_agents.add(agent_name)
 
-            # Step 3: Defender turns (with retry)
-            defender_responses = {}
-            for agent_name in deliveries:
-                if agent_name not in defenders:
+            # Step 3: Defender turns
+            while defender_queue:
+                agent_name = defender_queue.popleft()
+                queued_agents.discard(agent_name)
+                if agent_name in acted_this_turn or agent_name not in defenders:
                     continue
-                channel = deliveries[agent_name][0].channel if deliveries[agent_name] else "email"
+
+                acted_this_turn.add(agent_name)
+                channels = pending_channels.pop(agent_name, []) or ["email"]
                 model = self.config.roles.get(agent_name, "claude")
                 try:
-                    parsed_def = await self._call_and_parse_defender(defenders[agent_name], channel, model, max_retries)
+                    parsed_def = await self._call_and_parse_defender(defenders[agent_name], channels, model, max_retries)
                 except ParseError:
                     self.logger.log_inner_thought(turn, agent_name, "[PARSE_ERROR] Response unparseable after retries")
                     continue
+
                 defender_responses[agent_name] = parsed_def
                 self.logger.log_inner_thought(turn, agent_name, parsed_def.inner_thought)
                 self.logger.log_trust(turn, agent_name, parsed_def.trust_level, parsed_def.apparent_trust)
@@ -140,47 +169,30 @@ class SimulationEngine:
                     visibility = "internal" if msg.channel == "internal" else "public"
                     self.logger.log_message(turn, agent_name, msg.to, msg.channel, msg.content, visibility)
 
-            # Step 4: Internal channel propagation (max 1 round)
-            all_internal: list[tuple[str, Message]] = []
-            for agent_name, parsed in defender_responses.items():
-                internal = self.router.extract_internal_messages(parsed.messages)
-                for msg in internal:
-                    all_internal.append((agent_name, msg))
+                attacker_messages, deliveries = self.router.route_defender_messages(parsed_def.messages, sender=agent_name)
+                for msg in attacker_messages:
+                    public_to_attacker.append({"sender": agent_name, "channel": msg.channel, "content": msg.content})
 
-            if all_internal:
-                for sender, msg in all_internal:
-                    internal_deliveries = self.router.route_internal_messages([msg], sender=sender)
-                    for target_name, msgs in internal_deliveries.items():
-                        if target_name not in defender_responses:
-                            for m in msgs:
-                                defenders[target_name].receive_message(turn, sender, "internal", m.content)
-                            model = self.config.roles.get(target_name, "claude")
-                            try:
-                                parsed_cascade = await self._call_and_parse_defender(defenders[target_name], "internal", model, max_retries)
-                            except ParseError:
-                                self.logger.log_inner_thought(turn, target_name, "[PARSE_ERROR] Cascade response unparseable after retries")
-                                continue
-                            defender_responses[target_name] = parsed_cascade
-                            self.logger.log_inner_thought(turn, target_name, parsed_cascade.inner_thought)
-                            self.logger.log_trust(turn, target_name, parsed_cascade.trust_level, parsed_cascade.apparent_trust)
-                            new_internal = self.router.extract_internal_messages(parsed_cascade.messages)
-                            for m in new_internal:
-                                self.deferred_internal.append((target_name, m))
-                            for m in parsed_cascade.messages:
-                                visibility = "internal" if m.channel == "internal" else "public"
-                                self.logger.log_message(turn, target_name, m.to, m.channel, m.content, visibility)
-                        else:
-                            for m in msgs:
-                                self.deferred_internal.append((sender, m))
+                for target_name, msgs in deliveries.items():
+                    if target_name not in defenders:
+                        continue
+                    if target_name in acted_this_turn:
+                        for msg in msgs:
+                            self.deferred_messages.append((target_name, agent_name, msg))
+                        continue
 
-            # Step 5: Public responses back to attacker
-            all_public = []
-            for agent_name, parsed in defender_responses.items():
-                for msg in self.router.extract_public_messages(parsed.messages):
-                    all_public.append({"sender": agent_name, "channel": msg.channel, "content": msg.content})
-            attacker.receive_public_messages(turn, all_public)
+                    for msg in msgs:
+                        defenders[target_name].receive_message(turn, agent_name, msg.channel, msg.content)
+                        pending_channels[target_name].append(msg.channel)
+                    if target_name not in queued_agents:
+                        defender_queue.append(target_name)
+                        queued_agents.add(target_name)
 
-            # Step 6: Check end conditions
+            # Step 4: Public responses back to attacker
+            if public_to_attacker:
+                attacker.receive_public_messages(turn, public_to_attacker)
+
+            # Step 5: Check end conditions
             result = check_end_conditions(turn, defender_responses, max_turns=self.config.max_turns)
             if result:
                 self.logger.log_outcome(result.outcome, result.end_condition, turn)

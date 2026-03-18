@@ -26,4 +26,4 @@ def test_channel_per_target():
 
 def test_channel_switches():
     analyzer = ChannelAnalyzer(SAMPLE_LOG)
-    assert analyzer.channel_switches() == 2
+    assert analyzer.channel_switches() == 1

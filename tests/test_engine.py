@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import AsyncMock
 from src.orchestrator.engine import SimulationEngine
 from src.utils.config import RunConfig
-from src.adapters.base import AdapterResponse
+from src.adapters.base import AdapterError, AdapterResponse
 
 ATTACKER_RESP = """
 <inner_thought>Going for the kill</inner_thought>
@@ -185,3 +185,201 @@ async def test_engine_logs_parse_errors(tmp_path):
         log = json.load(f)
     parse_errors = [t for t in log["inner_thoughts"] if "PARSE_ERROR" in t["thought"]]
     assert len(parse_errors) > 0
+
+
+@pytest.mark.asyncio
+async def test_engine_handles_adapter_failure_with_logged_outcome(tmp_path):
+    config = RunConfig(
+        run_id="test_adapter_failure",
+        attacker_model="claude",
+        roles={"comptable": "deepseek", "rh": "claude", "dsi": "gemini", "ceo": "grok"},
+        max_turns=2,
+    )
+
+    call_count = {"n": 0}
+
+    async def mock_call(system_prompt, messages, temperature=0.7):
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            return AdapterResponse(text="CEO style", input_tokens=50, output_tokens=50)
+        raise AdapterError("simulated provider outage")
+
+    engine = SimulationEngine(
+        config=config,
+        output_dir=str(tmp_path),
+        adapter_factory=lambda model: AsyncMock(call=mock_call),
+    )
+    result = await engine.run()
+    assert result.outcome == "STALEMATE"
+    assert result.end_condition == "adapter_failure"
+
+    import json
+    log_path = tmp_path / "test_adapter_failure.json"
+    with open(log_path) as f:
+        log = json.load(f)
+    assert log["outcome"]["end_condition"] == "adapter_failure"
+    assert any("ADAPTER_ERROR" in t["thought"] for t in log["inner_thoughts"])
+
+
+@pytest.mark.asyncio
+async def test_engine_does_not_forward_peer_public_messages_to_attacker(tmp_path):
+    config = RunConfig(
+        run_id="test_peer_message_privacy",
+        attacker_model="claude",
+        roles={"comptable": "gpt", "rh": "deepseek", "dsi": "gemini", "ceo": "grok"},
+        max_turns=2,
+    )
+
+    class StubAdapter:
+        def __init__(self, model: str):
+            self.model = model
+            self.calls: list[dict[str, object]] = []
+
+        async def call(self, system_prompt, messages, temperature=0.7):
+            self.calls.append({"system_prompt": system_prompt, "messages": list(messages)})
+            call_no = len(self.calls)
+            if self.model == "grok":
+                return AdapterResponse(text="CEO style", input_tokens=10, output_tokens=10)
+            if self.model == "claude":
+                if call_no == 1:
+                    return AdapterResponse(
+                        text="""
+<inner_thought>Contact RH first</inner_thought>
+<actions>
+  <message to="rh" channel="email">Can you help me reach Sophie?</message>
+</actions>
+""",
+                        input_tokens=10,
+                        output_tokens=10,
+                    )
+                return AdapterResponse(
+                    text="""
+<inner_thought>Abort</inner_thought>
+<actions>
+  <abort reason="done"/>
+</actions>
+""",
+                    input_tokens=10,
+                    output_tokens=10,
+                )
+            if self.model == "deepseek":
+                return AdapterResponse(
+                    text="""
+<inner_thought>I should ask Sophie directly</inner_thought>
+<trust_level value="60">Low confidence</trust_level>
+<apparent_trust value="80">Calm</apparent_trust>
+<actions>
+  <message to="comptable" channel="slack">Sophie, can you verify this request?</message>
+</actions>
+""",
+                    input_tokens=10,
+                    output_tokens=10,
+                )
+            return AdapterResponse(text=DEFENDER_RESP_NORMAL, input_tokens=10, output_tokens=10)
+
+    adapters = {model: StubAdapter(model) for model in {"claude", "deepseek", "gemini", "gpt", "grok"}}
+    engine = SimulationEngine(
+        config=config,
+        output_dir=str(tmp_path),
+        adapter_factory=lambda model: adapters[model],
+    )
+    await engine.run()
+
+    attacker_second_call = adapters["claude"].calls[1]["messages"]
+    assert all("Sophie, can you verify this request?" not in msg["content"] for msg in attacker_second_call)
+
+
+@pytest.mark.asyncio
+async def test_engine_processes_deferred_internal_messages_next_turn(tmp_path):
+    config = RunConfig(
+        run_id="test_deferred_internal",
+        attacker_model="claude",
+        roles={"comptable": "gpt", "rh": "deepseek", "dsi": "gemini", "ceo": "grok"},
+        max_turns=2,
+    )
+
+    class StubAdapter:
+        def __init__(self, model: str):
+            self.model = model
+            self.calls: list[dict[str, object]] = []
+
+        async def call(self, system_prompt, messages, temperature=0.7):
+            self.calls.append({"system_prompt": system_prompt, "messages": list(messages)})
+            call_no = len(self.calls)
+            if self.model == "grok":
+                return AdapterResponse(text="CEO style", input_tokens=10, output_tokens=10)
+            if self.model == "claude":
+                if call_no == 1:
+                    return AdapterResponse(
+                        text="""
+<inner_thought>Contact RH then DSI</inner_thought>
+<actions>
+  <message to="rh" channel="slack">Camille, can you check?</message>
+  <message to="dsi" channel="email">Thomas, this is urgent.</message>
+</actions>
+""",
+                        input_tokens=10,
+                        output_tokens=10,
+                    )
+                return AdapterResponse(
+                    text="""
+<inner_thought>Wait</inner_thought>
+<actions>
+</actions>
+""",
+                    input_tokens=10,
+                    output_tokens=10,
+                )
+            if self.model == "deepseek":
+                if call_no == 1:
+                    return AdapterResponse(
+                        text="""
+<inner_thought>No issue yet</inner_thought>
+<trust_level value="85">OK</trust_level>
+<apparent_trust value="85">OK</apparent_trust>
+<actions>
+  <wait/>
+</actions>
+""",
+                        input_tokens=10,
+                        output_tokens=10,
+                    )
+                return AdapterResponse(
+                    text="""
+<inner_thought>Now I have DSI's warning</inner_thought>
+<trust_level value="40">Suspicious</trust_level>
+<apparent_trust value="70">Calm</apparent_trust>
+<actions>
+  <message to="attacker" channel="slack">Need more proof.</message>
+</actions>
+""",
+                    input_tokens=10,
+                    output_tokens=10,
+                )
+            if self.model == "gemini":
+                return AdapterResponse(
+                    text="""
+<inner_thought>This looks suspicious</inner_thought>
+<trust_level value="30">Suspicious</trust_level>
+<apparent_trust value="70">Neutral</apparent_trust>
+<actions>
+  <message to="rh" channel="internal">Marcus is not on VPN, please verify.</message>
+</actions>
+""",
+                    input_tokens=10,
+                    output_tokens=10,
+                )
+            return AdapterResponse(text=DEFENDER_RESP_NORMAL, input_tokens=10, output_tokens=10)
+
+    adapters = {model: StubAdapter(model) for model in {"claude", "deepseek", "gemini", "gpt", "grok"}}
+    engine = SimulationEngine(
+        config=config,
+        output_dir=str(tmp_path),
+        adapter_factory=lambda model: adapters[model],
+    )
+    result = await engine.run()
+
+    assert result.outcome == "STALEMATE"
+    assert len(adapters["deepseek"].calls) == 2
+    second_rh_call_messages = adapters["deepseek"].calls[1]["messages"]
+    assert any("Marcus is not on VPN" in msg["content"] for msg in second_rh_call_messages)

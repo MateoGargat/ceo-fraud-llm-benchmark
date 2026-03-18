@@ -1,7 +1,7 @@
 from __future__ import annotations
 import os
 from openai import AsyncOpenAI
-from src.adapters.base import BaseAdapter, AdapterResponse
+from src.adapters.base import AdapterError, BaseAdapter, AdapterResponse
 
 
 class XAIAdapter(BaseAdapter):
@@ -18,7 +18,10 @@ class XAIAdapter(BaseAdapter):
         kwargs = {"model": self.model, "messages": api_messages, "temperature": temperature}
         if self.seed is not None:
             kwargs["seed"] = self.seed
-        response = await self.client.chat.completions.create(**kwargs)
+        try:
+            response = await self.client.chat.completions.create(**kwargs)
+        except Exception as exc:
+            raise AdapterError(f"xAI adapter failed: {exc}") from exc
         if not response.choices:
             return AdapterResponse(text="", input_tokens=0, output_tokens=0)
         choice = response.choices[0]

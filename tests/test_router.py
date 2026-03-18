@@ -32,6 +32,7 @@ def test_router_extracts_public_for_attacker():
     router = Router(defender_names=["comptable", "rh", "dsi"])
     msgs = [
         Message(to="attacker", channel="email", content="Bien reçu"),
+        Message(to="comptable", channel="slack", content="Check with Sophie"),
         Message(to="securite-interne", channel="internal", content="Weird..."),
     ]
     public = router.extract_public_messages(msgs)
@@ -55,3 +56,10 @@ def test_router_internal_broadcast_on_securite_interne():
     assert "comptable" in internal
     assert "rh" in internal
     assert "dsi" not in internal
+
+
+def test_router_internal_unknown_target_is_ignored():
+    router = Router(defender_names=["comptable", "rh", "dsi"])
+    msg = Message(to="security", channel="internal", content="Typo should not broadcast")
+    internal = router.route_internal_messages([msg], sender="dsi")
+    assert internal == {}

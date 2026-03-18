@@ -50,3 +50,13 @@ def test_trust_change_rate_positive():
     tracker = TrustTracker(log)
     rate = tracker.change_rate("rh")
     assert rate == 30.0
+
+
+def test_trust_change_rate_uses_turn_span():
+    log = {"trust_levels": [
+        {"turn": 1, "agent": "comptable", "trust_level": 90, "apparent_trust": 90},
+        {"turn": 10, "agent": "comptable", "trust_level": 45, "apparent_trust": 45},
+    ]}
+    tracker = TrustTracker(log)
+    rate = tracker.change_rate("comptable")
+    assert rate == -5.0

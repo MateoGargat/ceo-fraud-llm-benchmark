@@ -33,10 +33,13 @@ class TrustTracker:
         return max(abs(e["apparent_trust"] - e["trust_level"]) for e in entries)
 
     def change_rate(self, agent: str) -> float:
-        traj = self.get_trajectory(agent)
-        if len(traj) < 2:
+        entries = sorted([e for e in self.trust_data if e["agent"] == agent], key=lambda x: x["turn"])
+        if len(entries) < 2:
             return 0.0
-        return (traj[-1] - traj[0]) / (len(traj) - 1)
+        turn_span = entries[-1]["turn"] - entries[0]["turn"]
+        if turn_span <= 0:
+            return 0.0
+        return (entries[-1]["trust_level"] - entries[0]["trust_level"]) / turn_span
 
     # Aliases for backward compatibility
     inflection_point = first_decline_turn

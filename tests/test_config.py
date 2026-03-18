@@ -77,3 +77,20 @@ max_turns: 20
     assert cfg.run_id == "a1_rep1"
     assert cfg.max_turns == 20
     assert cfg.attacker_model == "gpt"
+
+
+def test_run_config_rejects_non_positive_max_turns():
+    with pytest.raises(ValidationError):
+        RunConfig(
+            run_id="bad_turns",
+            attacker_model="claude",
+            roles={"comptable": "deepseek", "rh": "gpt", "dsi": "gemini", "ceo": "grok"},
+            max_turns=0,
+        )
+
+
+def test_load_config_rejects_empty_yaml(tmp_path):
+    yaml_file = tmp_path / "empty.yaml"
+    yaml_file.write_text("")
+    with pytest.raises(ValueError, match="mapping"):
+        load_config(str(yaml_file))

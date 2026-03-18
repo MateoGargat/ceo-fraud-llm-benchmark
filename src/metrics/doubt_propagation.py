@@ -4,8 +4,8 @@ from __future__ import annotations
 class DoubtPropagation:
     def __init__(self, log_data: dict):
         self.internal_msgs = sorted(
-            [m for m in log_data.get("messages", []) if m.get("visibility") == "internal"],
-            key=lambda m: m["turn"],
+            [{**m, "_order": i} for i, m in enumerate(log_data.get("messages", [])) if m.get("visibility") == "internal"],
+            key=lambda m: (m["turn"], m["_order"]),
         )
         self.trust_data = log_data.get("trust_levels", [])
 
@@ -16,11 +16,7 @@ class DoubtPropagation:
         return self.internal_msgs[0]["sender"] if self.internal_msgs else None
 
     def sender_sequence(self) -> list[str]:
-        senders = []
-        for msg in self.internal_msgs:
-            sender = msg["sender"]
-            if sender not in senders:
-                senders.append(sender)
+        senders = [msg["sender"] for msg in self.internal_msgs]
         return [f"{senders[i-1]} -> {senders[i]}" for i in range(1, len(senders))]
 
     def propagation_delay(self) -> int | None:

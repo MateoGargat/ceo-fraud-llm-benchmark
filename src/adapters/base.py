@@ -10,6 +10,10 @@ class AdapterResponse:
     output_tokens: int
 
 
+class AdapterError(RuntimeError):
+    pass
+
+
 class BaseAdapter(ABC):
     @abstractmethod
     async def call(

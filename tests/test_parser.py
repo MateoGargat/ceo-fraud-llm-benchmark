@@ -161,3 +161,58 @@ def test_parse_defender_zero_transfer_raises():
 """
     with pytest.raises(ParseError, match="positive"):
         parse_defender_response(xml)
+
+
+def test_parse_defender_empty_iban_raises():
+    from src.orchestrator.parser import ParseError
+    xml = """
+<inner_thought>Transfer</inner_thought>
+<trust_level value="80">OK</trust_level>
+<apparent_trust value="80">OK</apparent_trust>
+<actions>
+  <execute_transfer amount="100" iban=""/>
+</actions>
+"""
+    with pytest.raises(ParseError, match="IBAN"):
+        parse_defender_response(xml)
+
+
+def test_parse_attacker_invalid_channel_raises():
+    from src.orchestrator.parser import ParseError
+    xml = """
+<inner_thought>Bad message</inner_thought>
+<actions>
+  <message to="rh" channel="fax">Hello</message>
+</actions>
+"""
+    with pytest.raises(ParseError, match="channel"):
+        parse_attacker_response(xml)
+
+
+def test_parse_defender_missing_message_target_raises():
+    from src.orchestrator.parser import ParseError
+    xml = """
+<inner_thought>Need verification</inner_thought>
+<trust_level value="65">Suspicious</trust_level>
+<apparent_trust value="80">Normal</apparent_trust>
+<actions>
+  <message channel="slack">Need help</message>
+</actions>
+"""
+    with pytest.raises(ParseError, match="target"):
+        parse_defender_response(xml)
+
+
+def test_parse_defender_conflicting_terminal_actions_raise():
+    from src.orchestrator.parser import ParseError
+    xml = """
+<inner_thought>Conflicted</inner_thought>
+<trust_level value="20">Low</trust_level>
+<apparent_trust value="80">Pretending</apparent_trust>
+<actions>
+  <execute_transfer amount="100" iban="FR76123"/>
+  <declare_fraud target="attacker"/>
+</actions>
+"""
+    with pytest.raises(ParseError, match="conflicting"):
+        parse_defender_response(xml)

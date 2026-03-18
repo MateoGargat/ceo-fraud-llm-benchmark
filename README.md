@@ -22,7 +22,7 @@ pip install -e ".[dev]"
 
 # Configure API keys
 cp .env.example .env
-# Edit .env with your keys
+# Edit .env with your keys; the CLI scripts load it automatically
 
 # Estimate costs before running
 python scripts/estimate_cost.py configs/series_a/
